@@ -1,0 +1,1 @@
+`sudo apt-get install libgstreamer-plugins-bad1.0-dev`
