@@ -6,9 +6,7 @@ set(CMAKE_C_STANDARD 99)
 # Use pkg-config to get Gstreamer
 find_package(PkgConfig)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
-pkg_check_modules(GSTREAMER REQUIRED gstreamer-mpegts-1.0)
-
-message("GMID: ${GSTREAMER_MPEGTS_INCLUDE_DIRS}")
+pkg_check_modules(GSTREAMER_MPEGTS REQUIRED gstreamer-mpegts-1.0)
 
 # Include external directories
 include_directories(
@@ -26,4 +24,4 @@ add_executable(${PROJECT_NAME} main.c)
 # Link Gstreamer library with target executable
 target_link_libraries(${PROJECT_NAME}
     ${GSTREAMER_LIBRARIES}
-    gstreamer-mpegts-1.0)
+    ${GSTREAMER_MPEGTS_LIBRARIES})
