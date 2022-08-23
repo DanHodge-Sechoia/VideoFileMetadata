@@ -18,66 +18,53 @@ _on_bus_message (GstBus * bus, GstMessage * message, GMainLoop * mainloop)
   }
 }
 
-static void
-advertise_service (GstElement * mux)
-{
-  GstMpegtsSDTService *service;
-  GstMpegtsSDT *sdt;
-  GstMpegtsDescriptor *desc;
-  GstMpegtsSection *section;
-
-  sdt = gst_mpegts_sdt_new ();
-
-  sdt->actual_ts = TRUE;
-  sdt->transport_stream_id = 42;
-
-  service = gst_mpegts_sdt_service_new ();
-  service->service_id = 42;
-  service->running_status =
-    GST_MPEGTS_RUNNING_STATUS_RUNNING + service->service_id;
-  service->EIT_schedule_flag = FALSE;
-  service->EIT_present_following_flag = FALSE;
-  service->free_CA_mode = FALSE;
-
-  desc = gst_mpegts_descriptor_from_dvb_service
-    (GST_DVB_SERVICE_DIGITAL_TELEVISION, "some-service", NULL);
-
-  g_ptr_array_add (service->descriptors, desc);
-  g_ptr_array_add (sdt->services, service);
-
-  section = gst_mpegts_section_from_sdt (sdt);
-  gst_mpegts_section_send_event (section, mux);
-  gst_mpegts_section_unref (section);
-}
-
 int
 main (int argc, char **argv)
 {
   g_print ("main\n");
   GstElement *pipeline = NULL;
+  GstElement *source, *convert, *sink;
   GError *error = NULL;
   GstBus *bus;
   GMainLoop *mainloop;
-  GstElement *mux;
+
+  source = convert = sink = NULL;
 
   g_print ("gst_init\n");
   gst_init (&argc, &argv);
 
-  g_print ("gst_parse_launch\n");
-  pipeline = gst_parse_launch (PIPELINE_STR, &error);
-  if (error) {
-    g_print ("pipeline could not be constructed: %s\n", error->message);
-    g_clear_error (&error);
+  g_print ("creating pipeline\n");
+
+  pipeline = gst_pipeline_new("video-file-metadata-pipeline");
+
+  if (!pipeline) {
+    g_print ("pipeline could not be constructed\n");
     return 1;
   }
 
+  g_print ("adding elements\n");
+
+  source  = gst_element_factory_make("videotestsrc", "source");
+  convert = gst_element_factory_make("autovideoconvert", "convert");
+  sink    = gst_element_factory_make("xvimagesink", "sink");
+
+  if(!source || !convert || !sink) {
+    g_print ("could not create elements\n");
+    return 1;
+  }
+
+  gst_bin_add_many(GST_BIN(pipeline), source, convert, sink, NULL);
+  if (gst_element_link_many(source, convert, sink, NULL) != TRUE) {
+    g_print ("could not link elements\n");
+    return 1;
+  }
+
+  g_object_set(source,
+               "num-buffers", 100,
+               NULL);
+
   g_print ("g_main_loop_new\n");
   mainloop = g_main_loop_new (NULL, FALSE);
-
-  g_print ("gst_bin_get_by_name\n");
-  mux = gst_bin_get_by_name (GST_BIN (pipeline), "mux");
-  advertise_service (mux);
-  gst_object_unref (mux);
 
   /* Put a bus handler */
   g_print ("gst_pipeline_get_bus\n");
