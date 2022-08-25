@@ -38,6 +38,7 @@ main (int argc, char **argv)
   GstElement *pipeline = NULL;
   GstElement *source, *convert1, *x264enc, *queue1, *mpegtsmux, *tsdemux;
   GstElement *h264parse, *decoder, *convert2, *sink;
+  GstPad *video_queue_pad, *video_mux_pad;
   GstBus *bus;
   GMainLoop *mainloop;
   GstElementFactory *mpegtsmux_factory;
@@ -79,8 +80,22 @@ main (int argc, char **argv)
   gst_bin_add_many(GST_BIN(pipeline), source, convert1, x264enc, queue1, mpegtsmux, tsdemux,
                    h264parse, decoder, convert2, sink, NULL);
 
-  if (gst_element_link_many(source, convert1, x264enc, queue1, mpegtsmux, tsdemux, NULL) != TRUE) {
-    g_print ("could not link pre-demux elements\n");
+  if (gst_element_link_many(source, convert1, x264enc, queue1, NULL) != TRUE) {
+    g_print ("could not link video pre-demux elements\n");
+    return 1;
+  }
+
+  video_queue_pad = gst_element_get_static_pad(queue1, "src");
+  video_mux_pad   = gst_element_get_request_pad(mpegtsmux, "sink_%d");
+  g_print("Obtained request pad %s for video mux.\n", gst_pad_get_name(video_mux_pad));
+
+  if (gst_pad_link(video_queue_pad, video_mux_pad) != GST_PAD_LINK_OK) {
+    g_print ("video mux could not be linked\n");
+    return 1;
+  }
+
+  if (gst_element_link(mpegtsmux, tsdemux) != TRUE) {
+    g_print ("could not link mux to demux elements\n");
     return 1;
   }
 
