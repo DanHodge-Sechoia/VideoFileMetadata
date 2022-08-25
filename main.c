@@ -36,15 +36,16 @@ main (int argc, char **argv)
   // TODO DH check unrefs!
   g_print ("main\n");
   GstElement *pipeline = NULL;
-  GstElement *source, *convert1, *x264enc, *queue1, *mpegtsmux, *tsdemux;
-  GstElement *h264parse, *decoder, *convert2, *sink;
+  GstElement *video_source, *video_convert_1, *x264enc, *video_queue;
+  GstElement *mpegtsmux, *tsdemux;
+  GstElement *h264parse, *video_decoder, *video_convert_2, *video_sink;
   GstPad *video_queue_pad, *video_mux_pad;
   GstBus *bus;
   GMainLoop *mainloop;
   GstElementFactory *mpegtsmux_factory;
 
-  source = convert1 = x264enc = queue1 = mpegtsmux = tsdemux = NULL;
-  h264parse = decoder = convert2 = sink = NULL;
+  video_source = video_convert_1 = x264enc = video_queue = mpegtsmux = tsdemux = NULL;
+  h264parse = video_decoder = video_convert_2 = video_sink = NULL;
 
   g_print ("gst_init\n");
   gst_init (&argc, &argv);
@@ -59,33 +60,33 @@ main (int argc, char **argv)
 
   g_print ("adding elements\n");
 
-  source    = gst_element_factory_make("videotestsrc", "source");
-  convert1  = gst_element_factory_make("autovideoconvert", "convert1");
-  x264enc   = gst_element_factory_make("x264enc", "x264enc");
-  queue1    = gst_element_factory_make("queue", "queue1");
+  video_source    = gst_element_factory_make("videotestsrc", "video_source");
+  video_convert_1 = gst_element_factory_make("autovideoconvert", "video_convert_1");
+  x264enc         = gst_element_factory_make("x264enc", "x264enc");
+  video_queue     = gst_element_factory_make("queue", "video_queue");
+
   mpegtsmux = gst_element_factory_make("mpegtsmux", "mpegtsmux");
   tsdemux   = gst_element_factory_make("tsdemux", "tsdemux");
 
-  h264parse  = gst_element_factory_make("h264parse", "h264parse");
-  decoder = gst_element_factory_make("nvv4l2decoder", "decoder");
-  convert2   = gst_element_factory_make("videoconvert", "convert2");
-  sink       = gst_element_factory_make("nvoverlaysink", "sink");
+  h264parse       = gst_element_factory_make("h264parse", "h264parse");
+  video_decoder   = gst_element_factory_make("nvv4l2decoder", "video_decoder");
+  video_convert_2 = gst_element_factory_make("videoconvert", "video_convert_2");
+  video_sink      = gst_element_factory_make("nvoverlaysink", "video_sink");
 
-
-  if(!source || !convert1 || !x264enc || !queue1 || !mpegtsmux || !tsdemux || !sink) {
+  if(!video_source || !video_convert_1 || !x264enc || !video_queue || !mpegtsmux || !tsdemux || !video_sink) {
     g_print ("could not create elements\n");
     return 1;
   }
 
-  gst_bin_add_many(GST_BIN(pipeline), source, convert1, x264enc, queue1, mpegtsmux, tsdemux,
-                   h264parse, decoder, convert2, sink, NULL);
+  gst_bin_add_many(GST_BIN(pipeline), video_source, video_convert_1, x264enc, video_queue, mpegtsmux, tsdemux,
+                   h264parse, video_decoder, video_convert_2, video_sink, NULL);
 
-  if (gst_element_link_many(source, convert1, x264enc, queue1, NULL) != TRUE) {
+  if (gst_element_link_many(video_source, video_convert_1, x264enc, video_queue, NULL) != TRUE) {
     g_print ("could not link video pre-demux elements\n");
     return 1;
   }
 
-  video_queue_pad = gst_element_get_static_pad(queue1, "src");
+  video_queue_pad = gst_element_get_static_pad(video_queue, "src");
   video_mux_pad   = gst_element_get_request_pad(mpegtsmux, "sink_%d");
   g_print("Obtained request pad %s for video mux.\n", gst_pad_get_name(video_mux_pad));
 
@@ -99,14 +100,14 @@ main (int argc, char **argv)
     return 1;
   }
 
-  if (gst_element_link_many(h264parse, decoder, convert2, sink, NULL) != TRUE) {
+  if (gst_element_link_many(h264parse, video_decoder, video_convert_2, video_sink, NULL) != TRUE) {
     g_print ("could not link pre-demux elements\n");
     return 1;
   }
 
   g_signal_connect(tsdemux, "pad-added", G_CALLBACK(on_pad_added), h264parse);
 
-  g_object_set(source,
+  g_object_set(video_source,
                "num-buffers", 100,
                NULL);
 
