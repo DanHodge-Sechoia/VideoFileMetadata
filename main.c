@@ -1,7 +1,13 @@
 #include <gst/gst.h>
 #include <gst/mpegts/mpegts.h>
 
-#define PIPELINE_STR "videotestsrc num-buffers=1000 ! x264enc ! queue ! mpegtsmux name=mux ! fakesink"
+struct _OutputQueues
+{
+  GstElement *video;
+  GstElement *audio;
+};
+
+typedef struct _OutputQueues OutputQueues;
 
 static void
 on_bus_message (GstBus * bus, GstMessage * message, GMainLoop * mainloop)
@@ -21,11 +27,26 @@ on_bus_message (GstBus * bus, GstMessage * message, GMainLoop * mainloop)
 static void on_pad_added(GstElement *element, GstPad *pad, gpointer data)
 {
   GstPad *sinkpad;
-  GstElement *decoder = (GstElement *) data;
+  OutputQueues *output_queues = (OutputQueues *)data;
+  GstElement *output_queue;
 
   /* We can now link this pad with the its corresponding sink pad */
-  g_print("Dynamic pad created, linking demuxer/decoder\n");
-  sinkpad = gst_element_get_static_pad(decoder, "sink");
+  g_print("Dynamic pad created %s.\n", gst_pad_get_name(pad));
+
+  if (strncmp(gst_pad_get_name(pad), "video", 5) == 0) {
+    g_print("Linking video demuxer/decoder\n");
+    output_queue = output_queues->video;
+  }
+  else if (strncmp(gst_pad_get_name(pad), "audio", 5) == 0) {
+    g_print("Linking audio demuxer/decoder\n");
+    output_queue = output_queues->audio;
+  }
+  else {
+    g_print("Unhandled pad type: %s", gst_pad_get_name(pad));
+    return;
+  }
+
+  sinkpad = gst_element_get_static_pad(output_queue, "sink");
   gst_pad_link(pad, sinkpad);
   gst_object_unref(sinkpad);
 }
@@ -36,16 +57,17 @@ main (int argc, char **argv)
   // TODO DH check unrefs!
   g_print ("main\n");
   GstElement *pipeline = NULL;
-  GstElement *video_source, *video_convert_1, *x264enc, *video_queue;
+  GstElement *video_source, *video_convert_1, *x264enc, *video_queue_1;
+  GstElement *audio_source, *audio_convert_1, *voaacenc, *audio_queue_1;
   GstElement *mpegtsmux, *tsdemux;
-  GstElement *h264parse, *video_decoder, *video_convert_2, *video_sink;
+  OutputQueues output_queues;
+  GstElement *video_parser, *video_decoder, *video_convert_2, *video_sink;
+  GstElement *audio_parser, *audio_decoder, *audio_convert_2, *wavescope, *audio_sink;
   GstPad *video_queue_pad, *video_mux_pad;
+  GstPad *audio_queue_pad, *audio_mux_pad;
   GstBus *bus;
   GMainLoop *mainloop;
   GstElementFactory *mpegtsmux_factory;
-
-  video_source = video_convert_1 = x264enc = video_queue = mpegtsmux = tsdemux = NULL;
-  h264parse = video_decoder = video_convert_2 = video_sink = NULL;
 
   g_print ("gst_init\n");
   gst_init (&argc, &argv);
@@ -60,33 +82,59 @@ main (int argc, char **argv)
 
   g_print ("adding elements\n");
 
-  video_source    = gst_element_factory_make("videotestsrc", "video_source");
+  video_source    = gst_element_factory_make("videotestsrc"    , "video_source");
   video_convert_1 = gst_element_factory_make("autovideoconvert", "video_convert_1");
-  x264enc         = gst_element_factory_make("x264enc", "x264enc");
-  video_queue     = gst_element_factory_make("queue", "video_queue");
+  x264enc         = gst_element_factory_make("x264enc"         , "x264enc");
+  video_queue_1   = gst_element_factory_make("queue"           , "video_queue_1");
+
+  audio_source    = gst_element_factory_make("audiotestsrc", "audio_source");
+  audio_convert_1 = gst_element_factory_make("audioconvert", "audio_convert_1");
+  voaacenc        = gst_element_factory_make("voaacenc"    , "voaacenc");
+  audio_queue_1   = gst_element_factory_make("queue"       , "audio_queue_1");
 
   mpegtsmux = gst_element_factory_make("mpegtsmux", "mpegtsmux");
-  tsdemux   = gst_element_factory_make("tsdemux", "tsdemux");
+  tsdemux   = gst_element_factory_make("tsdemux"  , "tsdemux");
 
-  h264parse       = gst_element_factory_make("h264parse", "h264parse");
-  video_decoder   = gst_element_factory_make("nvv4l2decoder", "video_decoder");
-  video_convert_2 = gst_element_factory_make("videoconvert", "video_convert_2");
-  video_sink      = gst_element_factory_make("nvoverlaysink", "video_sink");
+  output_queues.video = gst_element_factory_make("queue"        , "video_queue_2");
+  video_parser        = gst_element_factory_make("h264parse"    , "h264parse");
+  video_decoder       = gst_element_factory_make("nvv4l2decoder", "video_decoder");
+  video_convert_2     = gst_element_factory_make("videoconvert" , "video_convert_2");
+  video_sink          = gst_element_factory_make("nvoverlaysink", "video_sink");
 
-  if(!video_source || !video_convert_1 || !x264enc || !video_queue || !mpegtsmux || !tsdemux || !video_sink) {
+  output_queues.audio = gst_element_factory_make("queue"        , "audio_queue_2");
+  audio_parser        = gst_element_factory_make("aacparse"     , "aacparse");
+  audio_decoder       = gst_element_factory_make("avdec_aac"    , "audio_decoder");
+  audio_convert_2     = gst_element_factory_make("audioconvert" , "audio_convert_2");
+  wavescope           = gst_element_factory_make("wavescope"    , "wavescope");
+  audio_sink          = gst_element_factory_make("ximagesink"   , "audio_sink");
+
+  if(!video_source        || !video_convert_1 || !x264enc         || !video_queue_1   ||
+     !audio_source        || !audio_convert_1 || !voaacenc        || !audio_queue_1   ||
+     !mpegtsmux           || !tsdemux         ||
+     !output_queues.video || !video_parser    || !video_decoder   || !video_convert_2 || !video_sink  ||
+     !output_queues.audio || !audio_parser    || !audio_decoder   || !audio_convert_2 || !wavescope   || !audio_sink) {
     g_print ("could not create elements\n");
     return 1;
   }
 
-  gst_bin_add_many(GST_BIN(pipeline), video_source, video_convert_1, x264enc, video_queue, mpegtsmux, tsdemux,
-                   h264parse, video_decoder, video_convert_2, video_sink, NULL);
+  gst_bin_add_many(GST_BIN(pipeline),
+                   video_source       , video_convert_1, x264enc      , video_queue_1  ,
+                   audio_source       , audio_convert_1, voaacenc     , audio_queue_1  ,
+                   mpegtsmux          , tsdemux        ,
+                   output_queues.video, video_parser   , video_decoder, video_convert_2, video_sink,
+                   output_queues.audio, audio_parser   , audio_decoder, audio_convert_2, wavescope , audio_sink, NULL);
 
-  if (gst_element_link_many(video_source, video_convert_1, x264enc, video_queue, NULL) != TRUE) {
-    g_print ("could not link video pre-demux elements\n");
+  if (gst_element_link_many(video_source, video_convert_1, x264enc, video_queue_1, NULL) != TRUE) {
+   g_print ("could not link video pre-demux elements\n");
+   return 1;
+  }
+
+  if (gst_element_link_many(audio_source, audio_convert_1, voaacenc, audio_queue_1, NULL) != TRUE) {
+    g_print ("could not link audio pre-demux elements\n");
     return 1;
   }
 
-  video_queue_pad = gst_element_get_static_pad(video_queue, "src");
+  video_queue_pad = gst_element_get_static_pad(video_queue_1, "src");
   video_mux_pad   = gst_element_get_request_pad(mpegtsmux, "sink_%d");
   g_print("Obtained request pad %s for video mux.\n", gst_pad_get_name(video_mux_pad));
 
@@ -95,20 +143,38 @@ main (int argc, char **argv)
     return 1;
   }
 
+  audio_queue_pad = gst_element_get_static_pad(audio_queue_1, "src");
+  audio_mux_pad   = gst_element_get_request_pad(mpegtsmux, "sink_%d");
+  g_print("Obtained request pad %s for audio mux.\n", gst_pad_get_name(audio_mux_pad));
+
+  if (gst_pad_link(audio_queue_pad, audio_mux_pad) != GST_PAD_LINK_OK) {
+    g_print ("audio mux could not be linked\n");
+    return 1;
+  }
+
   if (gst_element_link(mpegtsmux, tsdemux) != TRUE) {
     g_print ("could not link mux to demux elements\n");
     return 1;
   }
 
-  if (gst_element_link_many(h264parse, video_decoder, video_convert_2, video_sink, NULL) != TRUE) {
-    g_print ("could not link pre-demux elements\n");
+  if (gst_element_link_many(output_queues.video, video_parser, video_decoder, video_convert_2, video_sink, NULL) != TRUE) {
+   g_print ("could not link video output elements\n");
+   return 1;
+  }
+
+  if (gst_element_link_many(output_queues.audio, audio_parser, audio_decoder, audio_convert_2, wavescope, audio_sink, NULL) != TRUE) {
+    g_print ("could not link audio output elements\n");
     return 1;
   }
 
-  g_signal_connect(tsdemux, "pad-added", G_CALLBACK(on_pad_added), h264parse);
+  g_signal_connect(tsdemux, "pad-added", G_CALLBACK(on_pad_added), &output_queues);
 
   g_object_set(video_source,
-               "num-buffers", 100,
+              "num-buffers", 50,
+              NULL);
+
+  g_object_set(audio_source,
+               "num-buffers", 50,
                NULL);
 
   g_print ("g_main_loop_new\n");
