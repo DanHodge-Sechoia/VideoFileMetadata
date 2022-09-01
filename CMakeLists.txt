@@ -19,7 +19,7 @@ link_directories(
     ${GLIB_LIBRARY_DIRS}
     ${GSTREAMER_LIBRARY_DIRS})
 
-add_executable(${PROJECT_NAME} main.c)
+add_executable(${PROJECT_NAME} mpegts.c)
 
 # Link Gstreamer library with target executable
 target_link_libraries(${PROJECT_NAME}
