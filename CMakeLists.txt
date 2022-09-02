@@ -19,9 +19,16 @@ link_directories(
     ${GLIB_LIBRARY_DIRS}
     ${GSTREAMER_LIBRARY_DIRS})
 
-add_executable(${PROJECT_NAME} mpegts.c)
+add_executable(mpegts mpegts.c)
 
 # Link Gstreamer library with target executable
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(mpegts
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_MPEGTS_LIBRARIES})
+
+
+add_executable(h265sei h265sei.c gsth265transform.c)
+
+# Link Gstreamer library with target executable
+target_link_libraries(h265sei
+    ${GSTREAMER_LIBRARIES})
