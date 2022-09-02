@@ -55,7 +55,7 @@ int
 main (int argc, char **argv)
 {
   // TODO DH check unrefs!
-  g_print ("main\n");
+  g_print ("mpegts\n");
   GstElement *pipeline = NULL;
   GstElement *video_source, *video_convert_1, *x264enc, *video_queue_1;
   GstElement *audio_source, *audio_convert_1, *voaacenc, *audio_queue_1;
