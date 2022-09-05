@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 {
   g_print ("h265sei\r\n");
   GstElement *pipeline = NULL;
-  GstElement *video_source, *video_convert, *h265enc, *h265parse, *h265dec, *nvvidconv, *xvimagesink;
+  GstElement *video_source, *video_convert, *h265enc, *h265transform, *h265parse, *h265dec, *nvvidconv, *xvimagesink;
   GstBus *bus;
   GMainLoop *mainloop;
 
@@ -31,19 +31,20 @@ int main(int argc, char **argv)
   video_source  = gst_element_factory_make("videotestsrc"     , "video_source");
   video_convert = gst_element_factory_make("autovideoconvert" , "video_convert");
   h265enc       = gst_element_factory_make("nvv4l2h265enc"    , "h265enc");
+  h265transform = gst_element_factory_make("h265transform"    , "h265transform");
   h265parse     = gst_element_factory_make("h265parse"    , "h265parse");
   h265dec       = gst_element_factory_make("nvv4l2decoder"    , "h265dec");
   nvvidconv     = gst_element_factory_make("nvvidconv"        , "nvvidconv");
   xvimagesink   = gst_element_factory_make("xvimagesink"      , "xvimagesink");
 
-  if(!video_source || !video_convert || !h265enc || !h265parse || !h265dec || !nvvidconv || !xvimagesink) {
+  if(!video_source || !video_convert || !h265enc || !h265transform || !h265parse || !h265dec || !nvvidconv || !xvimagesink) {
     g_print ("could not create elements\n");
     return 1;
   }
 
-  gst_bin_add_many(GST_BIN(pipeline), video_source, video_convert, h265enc, h265parse, h265dec, nvvidconv, xvimagesink, NULL);
+  gst_bin_add_many(GST_BIN(pipeline), video_source, video_convert, h265enc, h265transform, h265parse, h265dec, nvvidconv, xvimagesink, NULL);
 
-  if (gst_element_link_many(video_source, video_convert, h265enc, h265parse, h265dec, nvvidconv, xvimagesink, NULL) != TRUE) {
+  if (gst_element_link_many(video_source, video_convert, h265enc, h265transform, h265parse, h265dec, nvvidconv, xvimagesink, NULL) != TRUE) {
     g_print ("could not link video elements\n");
     return 1;
   }
