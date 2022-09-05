@@ -27,7 +27,7 @@ target_link_libraries(mpegts
     ${GSTREAMER_MPEGTS_LIBRARIES})
 
 
-add_executable(h265sei h265sei.c gsth265transform.c)
+add_executable(h265sei h265sei.c)
 
 # Link Gstreamer library with target executable
 target_link_libraries(h265sei
