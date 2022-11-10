@@ -32,7 +32,7 @@ int main(int argc, char **argv)
   video_convert = gst_element_factory_make("autovideoconvert" , "video_convert");
   h265enc       = gst_element_factory_make("nvv4l2h265enc"    , "h265enc");
   h265transform = gst_element_factory_make("h265transform"    , "h265transform");
-  h265parse     = gst_element_factory_make("h265parse"    , "h265parse");
+  h265parse     = gst_element_factory_make("h265parse"        , "h265parse");
   h265dec       = gst_element_factory_make("nvv4l2decoder"    , "h265dec");
   nvvidconv     = gst_element_factory_make("nvvidconv"        , "nvvidconv");
   xvimagesink   = gst_element_factory_make("xvimagesink"      , "xvimagesink");
